@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lightweight HTML5 auto-complete</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="./css/styles.css" />
+<script type="module" src="./js/AutoComplete.js"></script>
+</head>
+<body>
+
+  <h1>Lightweight HTML5 auto-complete</h1>
+
+  <form id="autoform">
+
+    <label for="country">country:</label>
+
+    <auto-complete api="https://restcountries.eu/rest/v2/name/${country}?fields=name;alpha2Code;region" minlength="0" valid="please select a valid country">
+      <input type="text" id="country" name="country" data-name="name" size="50" required />
+      <input type="text" name="region" size="10" readonly />
+      <input type="text" name="countrycode" data-name="alpha2Code" size="2" readonly />
+    </auto-complete>
+
+    <button type="submit">submit</button>
+
+  </form>
+
+<script type="module">
+(() => {
+
+  const form = document.getElementById('autoform');
+
+  form.addEventListener('submit', e => {
+
+    e.preventDefault();
+    const data = new FormData(form);
+    console.log('\n');
+
+    for (let nv of data.entries()) {
+      console.log(`${ nv[0] }: ${ nv[1] }`);
+    }
+
+  });
+
+})();
+</script>
+
+</body>
+</html>

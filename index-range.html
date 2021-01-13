@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lightweight HTML5 auto-complete</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+
+  <h1>Lightweight HTML5 auto-complete</h1>
+
+  <form id="autoform">
+
+    <label for="experience">years experience:</label>
+    <input type="range" list="experiencedata" id="experience" name="experience" min="0" max="20" required />
+
+    <button type="submit">submit</button>
+
+  </form>
+
+  <datalist id="experiencedata">
+    <option>0</option>
+    <option>1</option>
+    <option>2</option>
+    <option>3</option>
+    <option>5</option>
+    <option>10</option>
+    <option>15</option>
+    <option>20</option>
+  </datalist>
+
+<script type="module">
+(() => {
+
+  const experience = document.getElementById('experience');
+
+  document.getElementById('autoform').addEventListener('submit', e => {
+
+    e.preventDefault();
+    console.log(experience.value);
+
+  });
+
+})();
+</script>
+
+</body>
+</html>
