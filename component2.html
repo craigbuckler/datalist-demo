@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lightweight HTML5 auto-complete</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="stylesheet" href="./css/styles.css" />
+<script type="module" src="./js/AutoComplete2.js"></script>
+</head>
+<body>
+
+  <h1>Lightweight HTML5 auto-complete</h1>
+
+  <form id="autoform">
+
+    <label for="country">country lookup:</label>
+
+    <auto-complete api="https://restcountries.eu/rest/v2/name/${country}?fields=name;alpha2Code;region" querymin="1" optionmax="20" valid="please select a valid country">
+      <input type="text" id="country" name="country" data-name="name" size="50" required />
+      <input type="text" name="region" size="10" readonly />
+      <input type="text" name="countrycode" data-name="alpha2Code" size="2" readonly />
+    </auto-complete>
+
+    <label for="artist">music artist lookup:</label>
+
+    <auto-complete api="https://musicbrainz.org/ws/2/artist?query=${artist}&limit=21&fmt=json" resultdata="artists" querymin="1" optionmax="20">
+      <input type="text" id="artist" name="artist" data-name="name" size="50" required />
+      <input type="text" name="artisttype" data-name="type" size="10" readonly />
+      <input type="text" name="artistcountry" data-name="country" size="2" readonly />
+    </auto-complete>
+
+    <button type="submit">submit</button>
+
+  </form>
+
+<script type="module">
+(() => {
+
+  const form = document.getElementById('autoform');
+
+  form.addEventListener('submit', e => {
+
+    e.preventDefault();
+    const data = new FormData(form);
+    console.log('\n');
+
+    for (let nv of data.entries()) {
+      console.log(`${ nv[0] }: ${ nv[1] }`);
+    }
+
+  });
+
+})();
+</script>
+
+</body>
+</html>

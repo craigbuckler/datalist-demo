@@ -1,32 +1,18 @@
-/*
-  <auto-complete> component
-
-  attributes:
-
-    api       - API to call. e.g. https://myapi/search/${query} append the current value of the input with ID or name of "query"
-    minlength - minimum number of characters to enter before an API search
-    valid     - set to an error message to validate the entry
-
-*/
-
 class AutoComplete extends HTMLElement {
-
-  static debounceDelay  = 500;          // input debounce delay
-  static queryRegExp    = /\$\{(.+)\}/; // API query RegExp
-
-  static componentCount = 0;            // components on page
-  static cache          = {};           // cached API results
-
 
   constructor() {
 
     super();
 
-    // unique component ID
-    this.listId = `auto-complete-component-${ ++AutoComplete.componentCount }`;
-
-    // initialize
-    this.minlength = 1;
+    // defaults
+    this.cache = {};
+    this.url = '';
+    this.param = {};
+    this.inputdelay = 300;
+    this.querymin = 1;
+    this.optionmax = 20;
+    this.valid = '';
+    this.lastQuery = '';
 
   }
 
@@ -34,7 +20,7 @@ class AutoComplete extends HTMLElement {
   // component attributes
   static get observedAttributes() {
 
-    return ['api', 'minlength', 'valid'];
+    return ['api', 'resultdata', 'resultname', 'inputdelay', 'querymin', 'optionmax', 'valid'];
 
   }
 
@@ -45,174 +31,171 @@ class AutoComplete extends HTMLElement {
     if (oldValue === newValue) return;
     this[property] = newValue;
 
-    // get query field from API URL
     if (property === 'api') {
 
-      const
-        fq = String(this.api).match(AutoComplete.queryRegExp),
-        q = fq && fq[1] && fq[1].trim();
+      // determine API parameters
+      this.param = {};
 
-      this.inputId = q || null;
-      this.input = q && (document.getElementById(q) || document.querySelector(`[name=${q}]`));
-      this.inputDataName = this.input && (this.input.dataset.name || q);
+      for (const match of this.api.matchAll(/\$\{(.+?)\}/g)) {
+
+        const f = document.getElementById(match[1].trim());
+        if (f) this.param[match[0]] = f;
+
+      }
 
     }
-
-    console.log('property', property, 'changed from', oldValue, 'to', newValue);
 
   }
 
 
-  // initialize component
+  // connect component
   connectedCallback() {
 
+    this.input = this.firstElementChild;
     if (!this.input) return;
 
-    // initialize API cache
-    AutoComplete.cache[this.api] = AutoComplete.cache[this.api] || {};
-    this.apiData = AutoComplete.cache[this.api];
+    const listId = (this.input.name || this.input.id) + 'list';
 
-    // fetch inputs
-    this.allInputs = this.getElementsByTagName('input');
+    // append datalist
+    const list = document.createElement('datalist');
+    list.id = listId;
+    this.datalist = this.insertBefore(list, this.input);
 
-    // create linked <datalist>
-    const dl = document.createElement('datalist');
-    dl.id = this.listId;
-    this.datalist = this.appendChild(dl);
-    this.input.setAttribute('autocomplete', this.listId);
-    this.input.setAttribute('list', this.listId);
+    // link datalist to input
+    this.input.setAttribute('autocomplete', 'off');
+    this.input.setAttribute('list', listId);
 
-    // attach debounded input event handler
+    // attach debounced input handler
     let debounce;
     this.inputHandler = e => {
 
       clearTimeout(debounce);
-      debounce = setTimeout(() => this.fetchMatches(e), AutoComplete.debounceDelay);
+      debounce = setTimeout(() => this.runQuery(e), this.inputdelay);
 
     };
     this.input.addEventListener('input', this.inputHandler);
 
-    // check validity
-    this.blurHandler = e => {
+    // check validity and update
+    this.changeHandler = () => {
 
-      if (!this.input || !this.valid) return;
+      // validate query value
+      const data = this.isValid();
 
-      this.input.setCustomValidity(this.validValue() ? '' : this.valid);
+      this.input.setCustomValidity(data ? '' : this.valid);
       this.input.checkValidity();
 
+      // update linked values
+      if (data) for (const name in data) {
+
+        Array.from(this.input.form.querySelectorAll(`[data-autofill="${ name }"]`)).forEach(f => {
+          f.value = data[name];
+        });
+
+      }
+
     };
-    this.input.addEventListener('blur', this.blurHandler);
+    this.input.addEventListener('change', this.changeHandler);
 
   }
 
 
-  // detach component
+  // disconnect component
   disconnectedCallback() {
 
-    if (!this.input) return;
-
-    // remove event handlers
     this.input.removeEventListener('input', this.inputHandler);
     this.input.removeEventListener('blur', this.blurHandler);
-
-    // remove datalist
     this.input.removeAttribute('list');
     this.datalist.remove();
-    this.datalist = null;
 
   }
 
 
-  // query API or fetch data from cache
-  fetchMatches() {
+  // call API
+  runQuery() {
 
-    const query = this.input.value;
+    const
+      query = this.input.value.trim().toLowerCase(),
+      valid = this.isValid(),
+      lq = this.lastQuery,
+      cq = lq && this.cache[lq];
 
-    if (query.length < this.minlength || this.apiData[query] || query.toLowerCase().startsWith(String(this.currentQuery).toLowerCase())) {
+    // get API URL
+    let url = this.api || '';
+    for (const p in this.param) {
+      url = url.replaceAll(p, (this.param[p].value || '').trim());
+    }
+
+    // new query necessary?
+    if (!this.api || valid || query.length < this.querymin || (cq && cq.complete && cq.url === url && query.startsWith(lq))) return;
+
+    if (this.cache[query] && this.cache[query].url === url) {
 
       // use cached data
-      this.datalistUpdate();
+      this.datalistUpdate( query );
       return;
 
     }
 
-    // fetch data
-    this.apiData[query] = this.apiData[query] || {};
-    const store = this.apiData[query];
+    // data fetch
+    this.cache[query] = {};
 
-    fetch(this.api.replace(AutoComplete.queryRegExp, query))
+    fetch(url)
       .then(res => res.json())
       .then(data => {
 
-        store.frag = document.createDocumentFragment();
-
         if (!data) return;
+        data = (this.resultdata && data[this.resultdata]) || data;
+        data = Array.isArray(data) ? data : [ data ];
 
-        // record data
-        store.data = Array.isArray(data) ? data : [ data ];
+        // create fragment
+        const frag = document.createDocumentFragment();
+        let optMax = this.optionmax;
 
-        // create DOM fragment
-        store.data.forEach(opt => {
+        for (let d = 0; d < data.length && optMax > 0; d++) {
 
-          const value = opt[this.inputDataName];
-          if (value) {
-            const o = document.createElement('option');
-            o.value = value;
-            store.frag.appendChild(o);
+          const value = data[d][this.resultname];
+
+          if (value && value.toLowerCase().includes(query)) {
+            const option = document.createElement('option');
+            option.value = value;
+            frag.appendChild(option);
+            optMax--;
           }
 
-        });
+        }
 
-        this.datalistUpdate();
+        // cache returned data
+        this.cache[query] = { url, data, frag, complete: optMax > 0 };
+        this.datalistUpdate( query );
 
       });
 
   }
 
 
-  // update datalist from cache
-  datalistUpdate() {
+  // update datalist
+  datalistUpdate(query) {
 
-    const
-      query = this.input.value,
-      valid = this.validValue();
+    const c = this.cache[query];
 
-    // update datalist if required
-    if (query.length < this.minlength) {
+    if (!c || !c.frag) return;
 
-      // this.datalist.replaceChildren( document.createDocumentFragment() );
-      this.currentQuery = null;
-
-    }
-    else if (!valid && !query.toLowerCase().startsWith(String(this.currentQuery).toLowerCase())) {
-
-      this.datalist.replaceChildren( this.apiData[query].frag.cloneNode(true) );
-      this.currentQuery = query;
-
-    }
-
-    // update linked inputs
-    Array.from(this.allInputs).forEach(i => {
-
-      if (i === this.input) return;
-      const name = i.dataset.name || i.name || i.id;
-      if (name) i.value = valid && valid[name] ? valid[name] : '';
-
-    });
-
+    this.lastQuery = query;
+    this.datalist.replaceChildren( c.frag.cloneNode(true) );
 
   }
 
 
-  // is query value valid?
-  validValue() {
+  // has a valid value been entered?
+  isValid() {
 
-    const query = this.input && this.input.value.trim();
-    if (!query || !this.currentQuery) return null;
+    const query = this.input.value.trim();
+    if (!query || !this.lastQuery) return;
 
-    return this.apiData[this.currentQuery].data.find(d => query === d[this.inputDataName]);
+    return this.cache[this.lastQuery].data.find(d => query === d[this.resultname]);
 
   }
+
 
 }
 
