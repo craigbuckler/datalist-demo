@@ -79,19 +79,23 @@ class AutoComplete extends HTMLElement {
     this.changeHandler = () => {
 
       // validate query value
-      const data = this.isValid();
+      const data = this.isValid() || this.reset || {};
 
       this.input.setCustomValidity(data ? '' : this.valid);
       this.input.checkValidity();
 
       // update linked values
-      if (data) for (const name in data) {
+      let reset = {};
+      for (const name in data) {
 
         Array.from(this.input.form.querySelectorAll(`[data-autofill="${ name }"]`)).forEach(f => {
-          f.value = data[name];
+          f.value = data[name] || '';
+          reset[name] = '';
         });
 
       }
+
+      this.reset = reset;
 
     };
     this.input.addEventListener('change', this.changeHandler);
